@@ -13,7 +13,7 @@ import scala.util.{Failure, Success, Try}
 object UserCreationApp extends App {
   import UserCreationExercises._
 
-  readUser(Console.system)
+  readUser(Console.system, Clock.system)
 }
 
 object UserCreationExercises {
@@ -113,7 +113,7 @@ object UserCreationExercises {
   // Note: You will need to add `subscribedToMailingList: Boolean` field to `User`.
   // Note: How can you mock the current time? Check the `Clock` class in this package
   //       and update the signature of `readUser`.
-  def readUser(console: Console): User = {
+  def readUser(console: Console, clock: Clock): User = {
     val name   = readName(console)
     val bday   = readDateOfBirth(console)
     val answer = readSubscribeToMailingList(console)
@@ -121,7 +121,7 @@ object UserCreationExercises {
       name = name,
       dateOfBirth = bday,
       subscribedToMailingList = answer,
-      createdAt = Instant.now()
+      createdAt = clock.now()
     )
     console.writeLine("User is $user")
     user
