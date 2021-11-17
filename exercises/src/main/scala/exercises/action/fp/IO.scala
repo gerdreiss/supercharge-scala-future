@@ -21,7 +21,7 @@ trait IO[A] {
   // prints "Fetching user", fetches user 1234 from db and returns it.
   // Note: There is a test for `andThen` in `exercises.action.fp.IOTest`.
   def andThen[Other](other: IO[Other]): IO[Other] =
-    ???
+    flatMap(_ => other)
 
   // Popular alias for `andThen` (cat-effect, Monix, ZIO).
   // For example,
@@ -30,7 +30,7 @@ trait IO[A] {
   //       Another popular symbol is <* so that `action1 <* action2`
   //       executes `action1` and then `action2` but returns the result of `action1`
   def *>[Other](other: IO[Other]): IO[Other] =
-    ???
+    this.andThen(other)
 
   // Runs the current action (`this`) and update the result with `callback`.
   // For example,
@@ -41,7 +41,7 @@ trait IO[A] {
   // Note: `callback` is expected to be an FP function (total, deterministic, no action).
   //       Use `flatMap` if `callBack` is not an FP function.
   def map[Next](callBack: A => Next): IO[Next] =
-    ???
+    flatMap(value => IO(callBack(value)))
 
   // Runs the current action (`this`), if it succeeds passes the result to `callback` and
   // runs the second action.
@@ -52,8 +52,14 @@ trait IO[A] {
   // action.unsafeRun()
   // Fetches the user with id 1234 from the database and send them an email using the email
   // address found in the database.
-  def flatMap[Next](callback: A => IO[Next]): IO[Next] =
-    ???
+  def flatMap[Next](callBack: A => IO[Next]): IO[Next] =
+    IO(callBack(unsafeRun()).unsafeRun())
+
+  // Popular alias for `flatMap` (cat-effect, Monix, ZIO).
+  // For example,
+  // action1 >>= action2 >>= action3
+  def >>=[Next](callback: A => IO[Next]): IO[Next] =
+    flatMap(callback)
 
   // Runs the current action, if it fails it executes `cleanup` and rethrows the original error.
   // If the current action is a success, it will return the result.
@@ -67,7 +73,12 @@ trait IO[A] {
   // IO(throw new Exception("Boom!")).onError(logError).unsafeRun()
   // prints "Got an error: Boom!" and throws new Exception("Boom!")
   def onError[Other](cleanup: Throwable => IO[Other]): IO[A] =
-    ???
+    handleErrorWith(e => cleanup(e) *> IO.fail(e))
+  // attempt
+  //   .flatMap {
+  //     case Success(value) => IO(value)
+  //     case Failure(error) => cleanup(error) *> IO.fail(error)
+  //   }
 
   // Retries this action until either:
   // * It succeeds.
@@ -84,7 +95,11 @@ trait IO[A] {
   // Note: `maxAttempt` must be greater than 0, otherwise the `IO` should fail.
   // Note: `retry` is a no-operation when `maxAttempt` is equal to 1.
   def retry(maxAttempt: Int): IO[A] =
-    ???
+    maxAttempt match {
+      case 0 => IO.fail(new IllegalArgumentException("maxAttempt must be greater than 0"))
+      case 1 => this
+      case _ => handleErrorWith(_ => retry(maxAttempt - 1))
+    }
 
   // Checks if the current IO is a failure or a success.
   // For example,
@@ -94,7 +109,7 @@ trait IO[A] {
   // 1. Success(User(1234, "Bob", ...)) if `action` was successful or
   // 2. Failure(new Exception("User 1234 not found")) if `action` throws an exception
   def attempt: IO[Try[A]] =
-    ???
+    IO(Try(unsafeRun()))
 
   // If the current IO is a success, do nothing.
   // If the current IO is a failure, execute `callback` and keep its result.
@@ -104,7 +119,10 @@ trait IO[A] {
   //   logError(e).andThen(emailClient.send(user.email, "Sorry something went wrong"))
   // )
   def handleErrorWith(callback: Throwable => IO[A]): IO[A] =
-    ???
+    attempt.flatMap {
+      case Success(value) => IO(value)
+      case Failure(error) => callback(error)
+    }
 
   //////////////////////////////////////////////
   // Concurrent IO
