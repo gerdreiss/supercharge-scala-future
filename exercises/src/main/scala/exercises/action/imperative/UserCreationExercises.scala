@@ -63,10 +63,8 @@ object UserCreationExercises {
   // Then, try to test this version using property-based testing.
   // Note: Check the `Console` companion object.
   // Bonus: Try to write a property-based test for `readSubscribeToMailingList`
-  def readSubscribeToMailingList(console: Console): Boolean = {
-    console.writeLine("Would you like to subscribe to our mailing list? [Y/N]")
-    readYesNo(console.readLine())
-  }
+  def readSubscribeToMailingList(console: Console): Boolean =
+    readYesNo(console.prompt("Would you like to subscribe to our mailing list? [Y/N]"))
 
   def formatYesNo(yesNo: Boolean) =
     if (yesNo) "Y" else "N"
@@ -91,8 +89,8 @@ object UserCreationExercises {
   // Note: You can use `LocalDate.parse` to parse a String into a LocalDate.
   // Note: You can use the formatter `dateOfBirthFormatter` (in scope).
   def readDateOfBirth(console: Console): LocalDate = {
-    console.writeLine("What's your date of birth? [dd-mm-yyyy]")
-    LocalDate.parse(console.readLine(), dateOfBirthFormatter)
+    val s = console.prompt("What's your date of birth? [dd-mm-yyyy]")
+    LocalDate.parse(s, dateOfBirthFormatter)
   }
 
   // 4. Implement a testable version of `readUser`.
@@ -114,7 +112,7 @@ object UserCreationExercises {
   // Note: How can you mock the current time? Check the `Clock` class in this package
   //       and update the signature of `readUser`.
   def readUser(console: Console, clock: Clock): User = {
-    val name   = readName(console)
+    val name   = console.prompt("What's your name?")
     val bday   = readDateOfBirth(console)
     val answer = readSubscribeToMailingList(console)
     val user = User(
@@ -123,14 +121,21 @@ object UserCreationExercises {
       subscribedToMailingList = answer,
       createdAt = clock.now()
     )
-    console.writeLine("User is $user")
+    console.writeLine(s"User is $user")
     user
   }
 
-  def readName(console: Console): String = {
-    console.writeLine("What's your name?")
-    console.readLine()
+  def readUser(console: Console, clock: Clock, maxAttempt: Int): User = {
+    require(maxAttempt > 0, "max attempts must be greater than zero.")
+    Try(readUser(console, clock)) match {
+      case Success(user) => user
+      case Failure(error) =>
+        console.writeLine("Oops, you made a mistake. Try again.")
+        if (maxAttempt == 1) throw error
+        readUser(console, clock, maxAttempt - 1)
+    }
   }
+
   //////////////////////////////////////////////
   // PART 2: Error handling
   //////////////////////////////////////////////
@@ -152,8 +157,17 @@ object UserCreationExercises {
   // Note: `maxAttempt` must be greater than 0, if not you should throw an exception.
   // Note: You can implement the retry logic using recursion or a for/while loop. I suggest
   //       trying both possibilities.
-  def readSubscribeToMailingListRetry(console: Console, maxAttempt: Int): Boolean =
-    ???
+  @tailrec
+  def readSubscribeToMailingListRetry(console: Console, maxAttempt: Int): Boolean = {
+    require(maxAttempt > 0, "max attempts must be greater than zero.")
+    Try(readYesNo(console.prompt("Would you like to subscribe to our mailing list? [Y/N]"))) match {
+      case Success(yesNo) => yesNo
+      case Failure(error) =>
+        console.writeLine("""Incorrect format, enter "Y" for Yes or "N" for "No"""")
+        if (maxAttempt == 1) throw error
+        readSubscribeToMailingListRetry(console, maxAttempt - 1)
+    }
+  }
 
   // 6. Implement `readDateOfBirthRetry` which behaves like
   // `readDateOfBirth` but retries when the user enters an invalid input.
@@ -170,8 +184,17 @@ object UserCreationExercises {
   // [Prompt] Incorrect format, for example enter "18-03-2001" for 18th of March 2001
   // Throws an exception because the user only had 1 attempt and they entered an invalid input.
   // Note: `maxAttempt` must be greater than 0, if not you should throw an exception.
-  def readDateOfBirthRetry(console: Console, maxAttempt: Int): LocalDate =
-    ???
+  @tailrec
+  def readDateOfBirthRetry(console: Console, maxAttempt: Int): LocalDate = {
+    require(maxAttempt > 0, "max attempts must be greater than zero.")
+    Try(readDateOfBirth(console)) match {
+      case Success(date) => date
+      case Failure(error) =>
+        console.writeLine("""Incorrect format, for example enter "18-03-2001" for 18th of March 2001""")
+        if (maxAttempt == 1) throw error
+        readDateOfBirthRetry(console, maxAttempt - 1)
+    }
+  }
 
   // 7. Update `readUser` so that it allows the user to make up to 2 mistakes (3 attempts)
   // when entering their date of birth and mailing list subscription flag.

@@ -6,6 +6,10 @@ import scala.io.StdIn
 trait Console {
   def writeLine(message: String): Unit
   def readLine(): String
+  def prompt(message: String): String = {
+    writeLine(message)
+    readLine()
+  }
 }
 
 object Console {
