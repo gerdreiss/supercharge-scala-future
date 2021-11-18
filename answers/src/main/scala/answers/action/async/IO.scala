@@ -31,14 +31,14 @@ sealed trait IO[+A] {
   def *>[Other](other: IO[Other]): IO[Other] = andThen(other)
   def *<[Other](other: IO[Other]): IO[A]     = flatMap(a => other.map(_ => a))
 
-  def map[Next](callBack: A => Next): IO[Next] =
-    flatMap(value => IO(callBack(value)))
+  def map[Next](callback: A => Next): IO[Next] =
+    flatMap(value => IO(callback(value)))
 
-  def flatMap[Next](callBack: A => IO[Next]): IO[Next] =
+  def flatMap[Next](callback: A => IO[Next]): IO[Next] =
     async { cb =>
       unsafeRunAsync {
         case Failure(exception) => cb(Failure(exception))
-        case Success(value)     => callBack(value).unsafeRunAsync(cb)
+        case Success(value)     => callback(value).unsafeRunAsync(cb)
       }
     }
 

@@ -17,16 +17,16 @@ sealed trait IO[A] {
   def onError[Other](cleanup: Throwable => IO[Other]): IO[A] =
     handleErrorWith(e => cleanup(e).attempt *> IO.fail(e))
 
-  def flatMap[Other](callBack: A => IO[Other]): IO[Other] =
+  def flatMap[Other](callback: A => IO[Other]): IO[Other] =
     IO {
       val result: A             = this.unsafeRun()
-      val nextAction: IO[Other] = callBack(result)
+      val nextAction: IO[Other] = callback(result)
 
       nextAction.unsafeRun()
     }
 
-  def map[Other](callBack: A => Other): IO[Other] =
-    flatMap(a => IO(callBack(a)))
+  def map[Other](callback: A => Other): IO[Other] =
+    flatMap(a => IO(callback(a)))
 
   def retry(maxAttempt: Int): IO[A] =
     IO {

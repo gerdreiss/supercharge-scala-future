@@ -6,12 +6,25 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
 import scala.collection.immutable
+import java.util.concurrent.ExecutorCompletionService
+import scala.concurrent.Awaitable
 
 trait IO[A] {
 
+  def unsafeRunAsync(callback: Try[A] => Unit): Unit
+
   // Executes the action.
   // This is the ONLY abstract method of the `IO` trait.
-  def unsafeRun(): A
+  def unsafeRun(): A = {
+    var result: Option[Try[A]] = None
+    val latch: CountDownLatch  = new CountDownLatch(1)
+    unsafeRunAsync { r =>
+      latch.countDown()
+      result = Some(r)
+    }
+    latch.await()
+    result.get.get
+  }
 
   // Runs the current IO (`this`), discards its result and runs the second IO (`other`).
   // For example,
@@ -40,9 +53,9 @@ trait IO[A] {
   // db.getUser(1234).map(_.name).unsafeRun()
   // Fetches the user with id 1234 from the database and returns its name.
   // Note: `callback` is expected to be an FP function (total, deterministic, no action).
-  //       Use `flatMap` if `callBack` is not an FP function.
-  def map[Next](callBack: A => Next): IO[Next] =
-    flatMap(value => IO(callBack(value)))
+  //       Use `flatMap` if `callback` is not an FP function.
+  def map[Next](callback: A => Next): IO[Next] =
+    flatMap(value => IO(callback(value)))
 
   // Runs the current action (`this`), if it succeeds passes the result to `callback` and
   // runs the second action.
@@ -53,8 +66,13 @@ trait IO[A] {
   // action.unsafeRun()
   // Fetches the user with id 1234 from the database and send them an email using the email
   // address found in the database.
-  def flatMap[Next](callBack: A => IO[Next]): IO[Next] =
-    IO(callBack(unsafeRun()).unsafeRun())
+  def flatMap[Next](next: A => IO[Next]): IO[Next] =
+    IO.async { onComplete =>
+      unsafeRunAsync {
+        case Failure(e) => onComplete(Failure(e))
+        case Success(a) => next(a).unsafeRunAsync(onComplete)
+      }
+    }
 
   // Popular alias for `flatMap` (cat-effect, Monix, ZIO).
   // For example,
@@ -139,24 +157,39 @@ trait IO[A] {
 
   // Runs both the current IO and `other` concurrently,
   // then combine their results into a tuple
-  def parZip[Other](other: IO[Other])(implicit ec: ExecutionContext): IO[(A, Other)] =
-    IO {
-      val future1: Future[A]         = Future(this.unsafeRun())
-      val future2: Future[Other]     = Future(other.unsafeRun())
-      val zipped: Future[(A, Other)] = future1.zip(future2)
-      Await.result(zipped, Duration.Inf)
+  def parZip[That](that: IO[That])(implicit ec: ExecutionContext): IO[(A, That)] =
+    IO.async { onComplete =>
+      val thisPromise: Promise[A]    = Promise()
+      val thatPromise: Promise[That] = Promise()
+
+      ec.execute(() => this.unsafeRunAsync(thisPromise.complete))
+      ec.execute(() => that.unsafeRunAsync(thatPromise.complete))
+
+      thisPromise.future.zip(thatPromise.future).onComplete(onComplete)
     }
 
 }
 
 object IO {
+
+  def async[A](onComplete: (Try[A] => Unit) => Unit): IO[A] =
+    new IO[A] {
+      def unsafeRunAsync(callback: Try[A] => Unit): Unit =
+        onComplete(callback)
+    }
+
   // Constructor for IO. For example,
   // val greeting: IO[Unit] = IO { println("Hello") }
   // greeting.unsafeRun()
   // prints "Hello"
   def apply[A](action: => A): IO[A] =
-    new IO[A] {
-      def unsafeRun(): A = action
+    async { callback =>
+      callback(Try(action))
+    }
+
+  def dispatch[A](action: => A)(implicit ec: ExecutionContext): IO[A] =
+    async { callback =>
+      ec.execute(() => callback(Try(action)))
     }
 
   // Construct an IO which throws `error` everytime it is called.
