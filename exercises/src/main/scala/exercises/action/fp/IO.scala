@@ -178,6 +178,22 @@ object IO {
   // If no error occurs, it returns the users in the same order:
   // List(User(1111, ...), User(2222, ...), User(3333, ...))
   def sequence[A](actions: List[IO[A]]): IO[List[A]] =
+    // this is not tailrec, which is a problem
+    // actions match {
+    //   case Nil => IO(Nil)
+    //   case head :: next =>
+    //     for {
+    //       r  <- head
+    //       rs <- sequence(next)
+    //     } yield r :: rs
+    // }
+    // this solution is stack safe
+    // actions.foldRight(IO(List.empty[A])) { (aio, aios) =>
+    //   for {
+    //     a  <- aio
+    //     as <- aios
+    //   } yield a :: as
+    // }
     traverse(actions)(identity)
 
   // `traverse` is a shortcut for `map` followed by `sequence`, similar to how

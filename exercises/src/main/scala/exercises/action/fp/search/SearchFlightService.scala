@@ -46,10 +46,12 @@ object SearchFlightService {
   def fromClients(clients: List[SearchFlightClient]): SearchFlightService =
     new SearchFlightService {
       def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
-        IO.traverse(clients) {
-          _.search(from, to, date)
-            .handleErrorWith(_ => IO.debug("search failed") *> IO(List.empty))
-        }.map(_.flatten)
+        IO
+          .traverse(clients) {
+            _.search(from, to, date)
+              .handleErrorWith(_ => IO.debug("search failed") *> IO(List.empty))
+          }
+          .map(_.flatten)
           .map(SearchResult.apply)
     }
 
