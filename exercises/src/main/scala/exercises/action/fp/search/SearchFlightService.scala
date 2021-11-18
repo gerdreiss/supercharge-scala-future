@@ -26,8 +26,7 @@ object SearchFlightService {
   def fromTwoClients(client1: SearchFlightClient, client2: SearchFlightClient): SearchFlightService =
     new SearchFlightService {
       def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
-        ???
-
+        fromClients(List(client1, client2)).search(from, to, date)
     }
 
   // 2. Several clients can return data for the same flight. For example, if we combine data
@@ -47,7 +46,11 @@ object SearchFlightService {
   def fromClients(clients: List[SearchFlightClient]): SearchFlightService =
     new SearchFlightService {
       def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
-        ???
+        IO.traverse(clients) {
+          _.search(from, to, date)
+            .handleErrorWith(_ => IO.debug("search failed") *> IO(List.empty))
+        }.map(_.flatten)
+          .map(SearchResult.apply)
     }
 
   // 5. Refactor `fromClients` using `sequence` or `traverse` from the `IO` companion object.
