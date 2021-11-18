@@ -23,10 +23,15 @@ object SearchFlightService {
   // (see `SearchResult` companion object).
   // Note: A example based test is defined in `SearchFlightServiceTest`.
   //       You can also defined tests for `SearchResult` in `SearchResultTest`
-  def fromTwoClients(client1: SearchFlightClient, client2: SearchFlightClient): SearchFlightService =
+  def fromTwoClients(client1: SearchFlightClient, client2: SearchFlightClient)(implicit
+    ec: ExecutionContext
+  ): SearchFlightService =
     new SearchFlightService {
       def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
-        fromClients(List(client1, client2)).search(from, to, date)
+        client1
+          .search(from, to, date)
+          .parZip(client2.search(from, to, date))
+          .map { case (flights1, flights2) => SearchResult(flights1 ++ flights2) }
     }
 
   // 2. Several clients can return data for the same flight. For example, if we combine data
@@ -43,11 +48,13 @@ object SearchFlightService {
   // a list of `SearchFlightClient`.
   // Note: You can use a recursion/loop/foldLeft to call all the clients and combine their results.
   // Note: We can assume `clients` to contain less than 100 elements.
-  def fromClients(clients: List[SearchFlightClient]): SearchFlightService =
+  def fromClients(clients: List[SearchFlightClient])(implicit
+    ec: ExecutionContext
+  ): SearchFlightService =
     new SearchFlightService {
       def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
         IO
-          .traverse(clients) {
+          .parTraverse(clients) {
             _.search(from, to, date)
               .handleErrorWith(_ => IO.debug("search failed") *> IO(List.empty))
           }

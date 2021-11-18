@@ -30,15 +30,15 @@ class SearchFlightServiceTest extends AnyFunSuite with ScalaCheckDrivenPropertyC
     val client1 = SearchFlightClient.constant(IO(List(flight3, flight1)))
     val client2 = SearchFlightClient.constant(IO(List(flight2, flight4)))
 
-    val service = SearchFlightService.fromTwoClients(client1, client2)
+    val service = SearchFlightService.fromTwoClients(client1, client2)(ExecutionContext.global)
     val result  = service.search(parisOrly, londonGatwick, today).unsafeRun()
 
     assert(result == SearchResult(List(flight1, flight2, flight3, flight4)))
   }
 
-  test("fromTwoClients should handle errors gracefully") {
+  test("fromTwoClients property based") {
     forAll(airportGen, airportGen, dateGen, clientGen, clientGen) { (from, to, date, client1, client2) =>
-      val service = SearchFlightService.fromTwoClients(client1, client2)
+      val service = SearchFlightService.fromTwoClients(client1, client2)(ExecutionContext.global)
       val result  = service.search(parisOrly, londonGatwick, date).attempt.unsafeRun()
 
       assert(result.isSuccess)
@@ -57,7 +57,7 @@ class SearchFlightServiceTest extends AnyFunSuite with ScalaCheckDrivenPropertyC
     val client1 = SearchFlightClient.constant(IO(List(flight3, flight1)))
     val client2 = SearchFlightClient.constant(IO(List(flight2, flight4)))
 
-    val service = SearchFlightService.fromClients(List(client1, client2))
+    val service = SearchFlightService.fromClients(List(client1, client2))(ExecutionContext.global)
     val result  = service.search(parisOrly, londonGatwick, today).unsafeRun()
 
     assert(result == SearchResult(List(flight1, flight2, flight3, flight4)))
@@ -65,7 +65,7 @@ class SearchFlightServiceTest extends AnyFunSuite with ScalaCheckDrivenPropertyC
 
   test("fromClients should handle errors gracefully") {
     forAll(airportGen, airportGen, dateGen, Gen.listOf(clientGen)) { (from, to, date, clients) =>
-      val service = SearchFlightService.fromClients(clients)
+      val service = SearchFlightService.fromClients(clients)(ExecutionContext.global)
       val result  = service.search(parisOrly, londonGatwick, date).attempt.unsafeRun()
 
       assert(result.isSuccess)

@@ -139,8 +139,13 @@ trait IO[A] {
 
   // Runs both the current IO and `other` concurrently,
   // then combine their results into a tuple
-  def parZip[Other](other: IO[Other])(ec: ExecutionContext): IO[(A, Other)] =
-    ???
+  def parZip[Other](other: IO[Other])(implicit ec: ExecutionContext): IO[(A, Other)] =
+    IO {
+      val future1: Future[A]         = Future(this.unsafeRun())
+      val future2: Future[Other]     = Future(other.unsafeRun())
+      val zipped: Future[(A, Other)] = future1.zip(future2)
+      Await.result(zipped, Duration.Inf)
+    }
 
 }
 
@@ -222,15 +227,17 @@ object IO {
   // If no error occurs, `parSequence` returns the users in the same order:
   // List(User(1111, ...), User(2222, ...), User(3333, ...))
   // Note: You may want to use `parZip` to implement `parSequence`.
-  def parSequence[A](actions: List[IO[A]])(ec: ExecutionContext): IO[List[A]] =
-    ???
+  def parSequence[A](actions: List[IO[A]])(implicit ec: ExecutionContext): IO[List[A]] =
+    actions.foldRight(IO(List.empty[A])) { (aio, aios) =>
+      aio.parZip(aios).map { case (a, as) => a :: as }
+    }
 
   // `parTraverse` is a shortcut for `map` followed by `parSequence`, similar to how
   // `flatMap`     is a shortcut for `map` followed by `flatten`
   // For example,
   // parTraverse(List(1111, 2222, 3333))(db.getUser) is equivalent to
   // parSequence(List(db.getUser(1111), db.getUser(2222), db.getUser(3333)))
-  def parTraverse[A, B](values: List[A])(action: A => IO[B])(ec: ExecutionContext): IO[List[B]] =
-    parSequence(values.map(action))(ec)
+  def parTraverse[A, B](values: List[A])(action: A => IO[B])(implicit ec: ExecutionContext): IO[List[B]] =
+    parSequence(values.map(action))
 
 }
