@@ -1,13 +1,9 @@
 package exercises.action.fp
 
 import java.util.concurrent.CountDownLatch
-import scala.annotation.tailrec
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{ExecutionContext, Promise}
 import scala.util.{Failure, Success, Try}
-import scala.collection.immutable
-import java.util.concurrent.ExecutorCompletionService
-import scala.concurrent.Awaitable
 
 trait IO[A] {
 
@@ -173,10 +169,7 @@ trait IO[A] {
 object IO {
 
   def async[A](onComplete: (Try[A] => Unit) => Unit): IO[A] =
-    new IO[A] {
-      def unsafeRunAsync(callback: Try[A] => Unit): Unit =
-        onComplete(callback)
-    }
+    (callback: Try[A] => Unit) => onComplete(callback)
 
   // Constructor for IO. For example,
   // val greeting: IO[Unit] = IO { println("Hello") }

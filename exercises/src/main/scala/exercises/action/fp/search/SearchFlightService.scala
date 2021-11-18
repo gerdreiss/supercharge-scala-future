@@ -26,13 +26,10 @@ object SearchFlightService {
   def fromTwoClients(client1: SearchFlightClient, client2: SearchFlightClient)(implicit
     ec: ExecutionContext
   ): SearchFlightService =
-    new SearchFlightService {
-      def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
-        client1
-          .search(from, to, date)
-          .parZip(client2.search(from, to, date))
-          .map { case (flights1, flights2) => SearchResult(flights1 ++ flights2) }
-    }
+    (from: Airport, to: Airport, date: LocalDate) => client1
+      .search(from, to, date)
+      .parZip(client2.search(from, to, date))
+      .map { case (flights1, flights2) => SearchResult(flights1 ++ flights2) }
 
   // 2. Several clients can return data for the same flight. For example, if we combine data
   // from British Airways and lastminute.com, lastminute.com may include flights from British Airways.
@@ -51,16 +48,13 @@ object SearchFlightService {
   def fromClients(clients: List[SearchFlightClient])(implicit
     ec: ExecutionContext
   ): SearchFlightService =
-    new SearchFlightService {
-      def search(from: Airport, to: Airport, date: LocalDate): IO[SearchResult] =
-        IO
-          .parTraverse(clients) {
-            _.search(from, to, date)
-              .handleErrorWith(_ => IO.debug("search failed") *> IO(List.empty))
-          }
-          .map(_.flatten)
-          .map(SearchResult.apply)
-    }
+    (from: Airport, to: Airport, date: LocalDate) => IO
+      .parTraverse(clients) {
+        _.search(from, to, date)
+          .handleErrorWith(_ => IO.debug("search failed") *> IO(List.empty))
+      }
+      .map(_.flatten)
+      .map(SearchResult.apply)
 
   // 5. Refactor `fromClients` using `sequence` or `traverse` from the `IO` companion object.
 

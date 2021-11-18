@@ -18,8 +18,5 @@ object SearchFlightClient {
 
   // test client which executes the same action for all requests
   def constant(flights: IO[List[Flight]]): SearchFlightClient =
-    new SearchFlightClient {
-      def search(from: Airport, to: Airport, date: LocalDate): IO[List[Flight]] =
-        flights
-    }
+    (_, _, _) => flights
 }
